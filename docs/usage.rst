@@ -93,6 +93,11 @@ Commandline options
   --benchmark-timer FUNC
                         Timer to use when measuring time. Default:
                         'time.perf_counter'
+  --benchmark-timeout-timer FUNC
+                        Timer to use for the warmup budget and the timer
+                        precision timeout. Must return elapsed real time in
+                        seconds. Not used when measuring the test function
+                        (see --benchmark-timer). Default: 'time.time'
   --benchmark-calibration-precision NUM
                         Precision to use when calibrating number of iterations.
                         Precision of 10 will make the timer look 10 times more

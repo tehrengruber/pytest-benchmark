@@ -61,6 +61,7 @@ class BenchmarkSession:
             'precision': config.getoption('benchmark_precision'),
             'confidence': config.getoption('benchmark_confidence'),
             'timer': load_timer(config.getoption('benchmark_timer')),
+            'timeout_timer': load_timer(config.getoption('benchmark_timeout_timer')),
             'calibration_precision': config.getoption('benchmark_calibration_precision'),
             'disable_gc': config.getoption('benchmark_disable_gc'),
             'warmup': config.getoption('benchmark_warmup'),

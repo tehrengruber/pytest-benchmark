@@ -7,13 +7,13 @@ import cProfile
 import gc
 import pstats
 import sys
-import time
 import traceback
 import typing
 from math import ceil
 from math import sqrt
 from pathlib import Path
 
+from . import timers
 from .timers import compute_timer_precision
 from .utils import NameWrapper
 from .utils import format_time
@@ -83,6 +83,7 @@ class BenchmarkFixture:
         cprofile_loops,
         cprofile_dump,
         group=None,
+        timeout_timer=None,
     ):
         self.name = node.name
         self.fullname = node._nodeid
@@ -100,6 +101,8 @@ class BenchmarkFixture:
 
         self._disable_gc = disable_gc
         self._timer = timer.target
+        # defaulted rather than required, so third parties constructing the fixture keep working
+        self._timeout_timer = timeout_timer.target if timeout_timer is not None else timers.timeout_timer
         self._min_rounds = min_rounds
         self._max_time = float(max_time)
         self._min_time = float(min_time)
@@ -130,7 +133,7 @@ class BenchmarkFixture:
         if timer in self._precisions:
             timer_precision = self._precisions[timer]
         else:
-            timer_precision = self._precisions[timer] = compute_timer_precision(timer)
+            timer_precision = self._precisions[timer] = compute_timer_precision(timer, self._timeout_timer)
             self._logger.debug('')
             self._logger.debug(f'Computing precision for {NameWrapper(timer)} ... {format_time(timer_precision)}s.', blue=True, bold=True)
         return timer_precision
@@ -234,7 +237,7 @@ class BenchmarkFixture:
             stats = self._make_stats(iterations)
 
             self._logger.debug(f'  Running {rounds} rounds x {iterations} iterations ...', yellow=True, bold=True)
-            run_start = time.time()
+            run_start = self._timeout_timer()
             if self._warmup:
                 warmup_rounds = min(rounds, max(1, int(self._warmup / iterations)))
                 self._logger.debug(f'  Warmup {warmup_rounds} rounds x {iterations} iterations ...')
@@ -247,7 +250,7 @@ class BenchmarkFixture:
                         stats.update(runner(loops_range))
                 else:
                     self._run_until_precise(runner, loops_range, stats, rounds)
-            self._logger.debug(f'  Ran for {format_time(time.time() - run_start)}s.', yellow=True, bold=True)
+            self._logger.debug(f'  Ran for {format_time(self._timeout_timer() - run_start)}s.', yellow=True, bold=True)
         if self.cprofile_loops is None:
             cprofile_loops = loops_range or range(1)
         else:
@@ -411,14 +414,16 @@ class BenchmarkFixture:
             loops_range = range(loops)
             duration = runner(loops_range)
             if self._warmup:
-                warmup_start = time.time()
+                warmup_start = self._timeout_timer()
                 warmup_iterations = 0
                 warmup_rounds = 0
-                while time.time() - warmup_start < self._max_time and warmup_iterations < self._warmup:
+                while self._timeout_timer() - warmup_start < self._max_time and warmup_iterations < self._warmup:
                     duration = min(duration, runner(loops_range))
                     warmup_rounds += 1
                     warmup_iterations += loops
-                self._logger.debug(f'    Warmup: {format_time(time.time() - warmup_start)}s ({warmup_rounds} x {loops} iterations).')
+                self._logger.debug(
+                    f'    Warmup: {format_time(self._timeout_timer() - warmup_start)}s ({warmup_rounds} x {loops} iterations).'
+                )
 
             self._logger.debug(f'    Measured {loops} iterations: {format_time(duration)}s.', yellow=True)
             if duration >= min_time:

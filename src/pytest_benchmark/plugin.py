@@ -19,6 +19,7 @@ from .fixture import BenchmarkFixture
 from .session import BenchmarkSession
 from .session import PerformanceRegression
 from .timers import default_timer
+from .timers import timeout_timer
 from .utils import DEFAULT_COLUMNS
 from .utils import NameWrapper
 from .utils import consistent_dumps
@@ -46,6 +47,7 @@ def pytest_report_header(config):
     return (
         'benchmark: {version} (defaults:'
         ' timer={timer}'
+        ' timeout_timer={timeout_timer}'
         ' disable_gc={0[disable_gc]}'
         ' min_rounds={0[min_rounds]}'
         ' min_time={0[min_time]}'
@@ -58,6 +60,7 @@ def pytest_report_header(config):
         bs.options,
         version=__version__,
         timer=bs.options.get('timer'),
+        timeout_timer=bs.options.get('timeout_timer'),
     )
 
 
@@ -216,6 +219,15 @@ def pytest_addoption(parser):
         type=parse_timer,
         default=str(NameWrapper(default_timer)),
         help='Timer to use when measuring time. Default: %(default)r',
+    )
+    group.addoption(
+        '--benchmark-timeout-timer',
+        metavar='FUNC',
+        type=parse_timer,
+        default=str(NameWrapper(timeout_timer)),
+        help='Timer to use for the warmup budget and the timer precision timeout. Must return '
+        'elapsed real time in seconds. Not used when measuring the test function (see --benchmark-timer). '
+        'Default: %(default)r',
     )
     group.addoption(
         '--benchmark-calibration-precision',
@@ -489,8 +501,9 @@ def benchmark(request):
         node = request.node
         marker = node.get_closest_marker('benchmark')
         options: dict[str, object] = dict(marker.kwargs) if marker else {}
-        if 'timer' in options:
-            options['timer'] = NameWrapper(options['timer'])
+        for name in ('timer', 'timeout_timer'):
+            if name in options:
+                options[name] = NameWrapper(options[name])
         fixture = BenchmarkFixture(
             node,
             add_stats=bs.benchmarks.append,
@@ -521,6 +534,7 @@ def pytest_runtest_setup(item):
                 'precision',
                 'confidence',
                 'timer',
+                'timeout_timer',
                 'group',
                 'disable_gc',
                 'warmup',

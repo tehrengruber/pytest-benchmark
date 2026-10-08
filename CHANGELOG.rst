@@ -2,6 +2,17 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Added ``--benchmark-timeout-timer``: the timer used for the warmup budget and the timer precision
+  timeout, previously hardwired to ``time.time``.
+  It can also be set per-test with the ``timeout_timer`` marker keyword.
+  This makes those budgets consistent with a custom ``--benchmark-timer``
+  (CPU time, device-synchronized clocks, a frozen clock in tests).
+  The motivating case is a distributed (MPI) run, where supplying a timer that all the ranks
+  agree on is what makes warmup and calibration deterministic.
+
 v5.3.0 (2026-08-23)
 --------------------
 

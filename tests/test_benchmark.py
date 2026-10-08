@@ -21,6 +21,7 @@ def test_help(testdir):
             '  --benchmark-min-rounds=NUM',
             '                        *Default: 5',
             '  --benchmark-timer=FUNC',
+            '  --benchmark-timeout-timer=FUNC',
             '  --benchmark-calibration-precision=NUM',
             '                        *Default: 10',
             '  --benchmark-warmup=[KIND]',
@@ -853,6 +854,99 @@ def test_custom_timer(testdir):
             'test_slow          *',
             '------*',
             '*====== 2 passed * ======*',
+        ]
+    )
+
+
+def test_custom_timeout_timer(testdir):
+    test = testdir.makepyfile(SIMPLE_TEST)
+    result = testdir.runpytest_subprocess('--benchmark-timeout-timer=time.time', test)
+    result.stdout.fnmatch_lines(
+        [
+            '* (defaults: timer=* timeout_timer=time.time *',
+            '*collected 2 items',
+            'test_custom_timeout_timer.py ..*',
+            '* benchmark: 2 tests *',
+            '*====== 2 passed * ======*',
+        ]
+    )
+
+
+TIMEOUT_TIMER_TEST = '''
+"""
+Tests for the timeout timer - the one used for the warmup budget and the timer precision
+timeout, as opposed to the timer that measures the test function.
+
+The warmup test calls BenchmarkFixture._calibrate_timer directly with a fake runner and
+fake timers, so the number of rounds is deterministic and nothing has to sleep.
+"""
+import time
+from functools import partial
+
+import pytest
+
+from pytest_benchmark.timers import compute_timer_precision
+
+def test_precision_timeout_uses_timeout_timer():
+    timer_calls = []
+
+    def timer():
+        timer_calls.append(None)
+        return len(timer_calls) * 1e-6
+
+    # a timeout timer that has already blown the 1 second timeout on the very first check,
+    # so the sampling loop must not run at all
+    clock = iter([0.0, 2.0])
+
+    assert compute_timer_precision(timer, partial(next, clock)) is None
+    assert len(timer_calls) == 1  # just the initial `previous = timer()`
+
+@pytest.mark.benchmark(warmup=True, warmup_iterations=10**8, max_time=1.0, min_time=0.000001)
+def test_warmup_budget_uses_timeout_timer(benchmark):
+    allowed_rounds = 7
+    clock_calls = []
+    runs = []
+
+    def timeout_timer():
+        # the warmup loop spends one call on `warmup_start` and one on every check, so the
+        # budget is blown right after `allowed_rounds` rounds have been run
+        clock_calls.append(None)
+        return 0.0 if len(clock_calls) <= allowed_rounds + 1 else 10.0
+
+    def unused_timer():
+        raise AssertionError('the measurement timer must not be used for the budgets')
+
+    def runner(loops_range):
+        runs.append(None)
+        return 1.0  # way above min_time, so calibration is done after a single pass
+
+    benchmark._mode = 'benchmark(...)'  # mark the fixture as used since we bypass __call__
+    benchmark._timer = unused_timer
+    benchmark._timeout_timer = timeout_timer
+    benchmark._precisions[unused_timer] = 1e-9  # the precision pass consults it too
+
+    duration, loops, loops_range = benchmark._calibrate_timer(runner)
+
+    assert len(runs) == 1 + allowed_rounds  # one calibration round, then the warmup rounds
+    assert duration == 1.0
+    assert loops == 1
+    assert loops_range == range(1)
+
+@pytest.mark.benchmark(timeout_timer=time.perf_counter, max_time=0.01, min_rounds=1)
+def test_timeout_timer_marker(benchmark):
+    benchmark(lambda: None)
+    assert benchmark._timeout_timer is time.perf_counter
+'''
+
+
+def test_timeout_timer(testdir):
+    test = testdir.makepyfile(TIMEOUT_TIMER_TEST)
+    result = testdir.runpytest_subprocess(test)
+    result.stdout.fnmatch_lines(
+        [
+            '*collected 3 items',
+            'test_timeout_timer.py ...*',
+            '*====== 3 passed * ======*',
         ]
     )
 

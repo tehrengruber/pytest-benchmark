@@ -3,6 +3,9 @@
   PYTEST_DONT_REWRITE
 """
 
+# Timer used for the warmup budget and the timer precision timeout. Not used when
+# measuring the test function. Must return elapsed real time in seconds - the budgets are
+# compared against --benchmark-max-time, so the unit is part of the contract.
 from time import time as timeout_timer
 
 try:
@@ -18,7 +21,7 @@ else:
     default_timer = monotonic
 
 
-def compute_timer_precision(timer):
+def compute_timer_precision(timer, timeout_timer=timeout_timer):
     precision = None
     points = 0
     timeout = timeout_timer() + 1.0
