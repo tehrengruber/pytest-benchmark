@@ -951,6 +951,16 @@ def test_timeout_timer(testdir):
     )
 
 
+def test_default_timeout_timer(testdir):
+    test = testdir.makepyfile(SIMPLE_TEST)
+    result = testdir.runpytest_subprocess('--benchmark-max-time=0.0000001', '--doctest-modules', test)
+    result.stdout.fnmatch_lines(
+        [
+            '* (defaults: timer=* timeout_timer=time.monotonic *',
+        ]
+    )
+
+
 def test_bogus_timer(testdir):
     test = testdir.makepyfile(SIMPLE_TEST)
     result = testdir.runpytest_subprocess('--benchmark-timer=bogus', test)

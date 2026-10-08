@@ -12,6 +12,8 @@ Unreleased
   (CPU time, device-synchronized clocks, a frozen clock in tests).
   The motivating case is a distributed (MPI) run, where supplying a timer that all the ranks
   agree on is what makes warmup and calibration deterministic.
+* Those budgets now default to ``time.monotonic`` instead of ``time.time``, so a clock
+  adjustment (eg: NTP) can no longer stretch or cut the warmup budget.
 
 v5.3.0 (2026-08-23)
 --------------------

@@ -6,7 +6,8 @@
 # Timer used for the warmup budget and the timer precision timeout. Not used when
 # measuring the test function. Must return elapsed real time in seconds - the budgets are
 # compared against --benchmark-max-time, so the unit is part of the contract.
-from time import time as timeout_timer
+# Monotonic, so that a clock adjustment can't stretch or cut a budget.
+from time import monotonic as timeout_timer
 
 try:
     from __pypy__.time import CLOCK_MONOTONIC  # type: ignore
